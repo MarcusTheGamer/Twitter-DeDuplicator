@@ -1,53 +1,38 @@
-(async () => {
-  // Ensure browser object is available
-  const browser = window.browser || (typeof chrome !== "undefined" ? chrome : null);
-  if (!browser) {
-    console.error("Browser object is undefined. Extension APIs are not available.");
-    return;
-  }
+// Run this once at the start
+processPosts();
 
-  // Check if storage API is available
-  if (!browser.storage || !browser.storage.local) {
-    console.error("browser.storage.local is undefined. Check permissions in manifest.json.");
-    return;
-  }
+let mutationTimer = null;
 
-  // Initialize storage for seen posts
-  let seenPosts;
-  try {
-    const data = await browser.storage.local.get("seenPosts");
-    seenPosts = new Set(data.seenPosts || []);
-    console.log("Loaded seenPosts:", Array.from(seenPosts));
-  } catch (error) {
-    console.error("Error accessing storage:", error);
-    seenPosts = new Set();
-  }
+const observer = new MutationObserver(() => {
+  clearTimeout(mutationTimer);
+  mutationTimer = setTimeout(() => {
+    console.log("DOM changed, re-checking");
+    processPosts();
+  }, 100);
+});
 
-  // Function to save seen posts to storage
-  async function saveSeenPosts() {
-    try {
-      await browser.storage.local.set({ seenPosts: Array.from(seenPosts) });
-      console.log("Saved seenPosts:", Array.from(seenPosts));
-    } catch (error) {
-      console.error("Error saving to storage:", error);
-    }
-  }
+observer.observe(document.body, { childList: true, subtree: true });
 
 function processPosts() {
-  const posts = document.querySelectorAll('article[role="article"]');
-  console.log(`Found ${posts.length} posts`);
+  const postElements = document.querySelectorAll('article[role="article"]');
+  if (postElements.length === 0) return;
 
-  const newPostIds = new Set();
+  console.log(`Found ${postElements.length} posts`);
 
-  posts.forEach((post, index) => {
+  // Track post IDs seen in THIS batch only
+  const idsInCurrentBatch = new Set();
+
+  postElements.forEach((post, index) => {
     let postId = null;
 
+    // Try to find link with /status/ and extract ID
     const link = post.querySelector('a[href*="/status/"]');
     if (link) {
       const match = link.href.match(/\/status\/(\d+)/);
       postId = match ? match[1] : null;
     }
 
+    // Fallback: check if time element is inside a link with /status/
     if (!postId) {
       const timeElement = post.querySelector('time');
       if (timeElement) {
@@ -59,46 +44,21 @@ function processPosts() {
       }
     }
 
-    console.log(`Post ${index}: ID = ${postId || "not found"}`);
     if (!postId) {
-      console.warn(`Post ${index}: No valid ID found, skipping`);
+      console.warn(`Could not find post ID for post ${index}`);
       return;
     }
 
-    if (seenPosts.has(postId)) {
-      console.log(`Hiding duplicate post ${postId}`);
-      post.style.display = "none";
+    console.log(`Post ${index}: ID = ${postId}`);
+
+    if (idsInCurrentBatch.has(postId)) {
+      // Duplicate in current batch - hide it
+      post.style.display = 'none';
+      console.log(`Hid duplicate post in current batch: ${postId}`);
     } else {
-      newPostIds.add(postId);
+      // Show post and remember its ID
+      post.style.display = '';
+      idsInCurrentBatch.add(postId);
     }
   });
-
-  // Add all newly seen posts to the seenPosts set
-  if (newPostIds.size > 0) {
-    for (const id of newPostIds) {
-      seenPosts.add(id);
-    }
-    saveSeenPosts();
-  }
 }
-
-  // Start of the actual code that runs the functions and gets everything going
-
-  // Initial processing of posts
-  console.log("Starting post processing");
-  processPosts();
-
-  // Look for changes in the DOM (Basically the HTML) to detect if new posts have loaded, 
-  // due to Twitter loading posts depending on the height of the page and where the user is on said page
-  const observer = new MutationObserver((mutations) => {
-    console.log("DOM changed, reprocessing posts");
-    mutations.forEach(() => processPosts());
-  });
-
-  const targetNode = document.querySelector('main[role="main"]') || document.body;
-  console.log("Observing target node:", targetNode);
-  observer.observe(targetNode, {
-    childList: true,
-    subtree: true,
-  });
-})();
