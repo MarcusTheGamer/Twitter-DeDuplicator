@@ -33,56 +33,63 @@
     }
   }
 
-  // Function to process posts and hide duplicates
-  function processPosts() {
-    const posts = [];
-    posts = document.querySelectorAll('article[role="article"]');
-    console.log(`Found ${posts.length} posts`);
+function processPosts() {
+  const posts = document.querySelectorAll('article[role="article"]');
+  console.log(`Found ${posts.length} posts`);
 
-    posts.includes();
+  const newPostIds = new Set();
 
-    posts.forEach((post, index) => {
-      let postId = null;
-      const link = post.querySelector('a[href*="/status/"]');
-      if (link) {
-        const match = link.href.match(/\/status\/(\d+)/);
-        postId = match ? match[1] : null;
-      }
+  posts.forEach((post, index) => {
+    let postId = null;
 
-      if (!postId) {
-        const timeElement = post.querySelector('time');
-        if (timeElement) {
-          const parentLink = timeElement.closest('a[href*="/status/"]');
-          if (parentLink) {
-            const match = parentLink.href.match(/\/status\/(\d+)/);
-            postId = match ? match[1] : null;
-          }
+    const link = post.querySelector('a[href*="/status/"]');
+    if (link) {
+      const match = link.href.match(/\/status\/(\d+)/);
+      postId = match ? match[1] : null;
+    }
+
+    if (!postId) {
+      const timeElement = post.querySelector('time');
+      if (timeElement) {
+        const parentLink = timeElement.closest('a[href*="/status/"]');
+        if (parentLink) {
+          const match = parentLink.href.match(/\/status\/(\d+)/);
+          postId = match ? match[1] : null;
         }
       }
+    }
 
-      console.log(`Post ${index}: ID = ${postId || "not found"}`);
+    console.log(`Post ${index}: ID = ${postId || "not found"}`);
+    if (!postId) {
+      console.warn(`Post ${index}: No valid ID found, skipping`);
+      return;
+    }
 
-      if (!postId) {
-        console.warn(`Post ${index}: No valid ID found, skipping`);
-        return;
-      }
+    if (seenPosts.has(postId)) {
+      console.log(`Hiding duplicate post ${postId}`);
+      post.style.display = "none";
+    } else {
+      newPostIds.add(postId);
+    }
+  });
 
-      if (seenPosts.has(postId)) {
-        console.log(`Hiding duplicate post ${postId}`);
-        post.style.display = "none";
-      } else {
-        console.log(`Adding new post ${postId}`);
-        seenPosts.add(postId);
-        saveSeenPosts();
-      }
-    });
+  // Add all newly seen posts to the seenPosts set
+  if (newPostIds.size > 0) {
+    for (const id of newPostIds) {
+      seenPosts.add(id);
+    }
+    saveSeenPosts();
   }
+}
+
+  // Start of the actual code that runs the functions and gets everything going
 
   // Initial processing of posts
   console.log("Starting post processing");
   processPosts();
 
-  // Observe DOM changes for dynamically loaded posts
+  // Look for changes in the DOM (Basically the HTML) to detect if new posts have loaded, 
+  // due to Twitter loading posts depending on the height of the page and where the user is on said page
   const observer = new MutationObserver((mutations) => {
     console.log("DOM changed, reprocessing posts");
     mutations.forEach(() => processPosts());
