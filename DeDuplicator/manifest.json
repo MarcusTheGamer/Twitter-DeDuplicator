@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "X Post Deduplicator",
+  "version": "1.0",
+  "description": "Hides duplicate posts on X by tracking seen posts.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.x.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
